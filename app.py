@@ -4,14 +4,6 @@ import requests
 import os
 import uuid
 
-# Auto-install ffmpeg if not available
-try:
-    result = subprocess.run(["ffmpeg", "-version"], capture_output=True)
-    if result.returncode != 0:
-        os.system("apt-get update -y && apt-get install -y ffmpeg")
-except FileNotFoundError:
-    os.system("apt-get update -y && apt-get install -y ffmpeg")
-
 app = Flask(__name__)
 
 @app.route('/health', methods=['GET'])
@@ -32,14 +24,14 @@ def merge():
         audio_url  = data['audio']
         subtitle_text = data['text']
 
-        uid     = str(uuid.uuid4())[:8]
-        v1      = f"/tmp/v1_{uid}.mp4"
-        v2      = f"/tmp/v2_{uid}.mp4"
-        audio   = f"/tmp/audio_{uid}.mp3"
-        merged  = f"/tmp/merged_{uid}.mp4"
-        final   = f"/tmp/final_{uid}.mp4"
-        srt     = f"/tmp/sub_{uid}.srt"
-        list_f  = f"/tmp/list_{uid}.txt"
+        uid    = str(uuid.uuid4())[:8]
+        v1     = f"/tmp/v1_{uid}.mp4"
+        v2     = f"/tmp/v2_{uid}.mp4"
+        audio  = f"/tmp/audio_{uid}.mp3"
+        merged = f"/tmp/merged_{uid}.mp4"
+        final  = f"/tmp/final_{uid}.mp4"
+        srt    = f"/tmp/sub_{uid}.srt"
+        list_f = f"/tmp/list_{uid}.txt"
 
         # Download files
         for url, path in [(video1_url, v1), (video2_url, v2), (audio_url, audio)]:
@@ -48,7 +40,7 @@ def merge():
             with open(path, 'wb') as f:
                 f.write(r.content)
 
-        # Generate SRT subtitles (4 words per frame)
+        # Generate SRT subtitles
         words = subtitle_text.split()
         total_duration = 20.0
         chunk_size = 4
@@ -102,7 +94,7 @@ def merge():
             final
         ], check=True, capture_output=True)
 
-        # Upload result to file.io (auto-deleted after first download)
+        # Upload to file.io
         with open(final, 'rb') as f:
             resp = requests.post('https://file.io/?expires=1d', files={'file': f}, timeout=60)
 

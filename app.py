@@ -12,6 +12,7 @@ def merge():
     video1_url = data['video1']
     video2_url = data['video2']
     audio_url = data['audio']
+    subtitle_text = data['text']
     
     uid = str(uuid.uuid4())[:8]
     v1 = f"/tmp/v1_{uid}.mp4"
@@ -19,12 +20,35 @@ def merge():
     audio = f"/tmp/audio_{uid}.mp3"
     merged = f"/tmp/merged_{uid}.mp4"
     final = f"/tmp/final_{uid}.mp4"
+    srt = f"/tmp/sub_{uid}.srt"
     
     # Download files
     for url, path in [(video1_url, v1), (video2_url, v2), (audio_url, audio)]:
         r = requests.get(url)
         with open(path, 'wb') as f:
             f.write(r.content)
+    
+    # Generate SRT subtitles
+    words = subtitle_text.split()
+    total_duration = 20
+    words_per_second = len(words) / total_duration
+    
+    srt_content = ""
+    chunk_size = 4  # слів на кадр
+    chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
+    
+    for i, chunk in enumerate(chunks):
+        start = i * (total_duration / len(chunks))
+        end = (i + 1) * (total_duration / len(chunks))
+        
+        def to_srt_time(t):
+            h, m, s = int(t//3600), int((t%3600)//60), t%60
+            return f"{h:02}:{m:02}:{s:06.3f}".replace('.', ',')
+        
+        srt_content += f"{i+1}\n{to_srt_time(start)} --> {to_srt_time(end)}\n{' '.join(chunk)}\n\n"
+    
+    with open(srt, 'w') as f:
+        f.write(srt_content)
     
     # Merge videos
     with open(f"/tmp/list_{uid}.txt", "w") as f:
@@ -36,11 +60,12 @@ def merge():
         "-c", "copy", merged
     ])
     
-    # Add audio
+    # Add audio + subtitles
     subprocess.run([
         "ffmpeg", "-i", merged, "-i", audio,
+        "-vf", f"subtitles={srt}:force_style='FontName=Arial,FontSize=18,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Bold=1,Alignment=2'",
         "-map", "0:v", "-map", "1:a",
-        "-c:v", "copy", "-c:a", "aac",
+        "-c:v", "libx264", "-c:a", "aac",
         "-shortest", final
     ])
     

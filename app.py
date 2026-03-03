@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, send_file
-import subprocess, requests, os, uuid, json
+import subprocess, requests, os, uuid
 from pathlib import Path
 
 def install_ffmpeg():
@@ -21,8 +21,7 @@ def health():
 @app.route('/merge', methods=['POST'])
 def merge():
     data = request.json
-    uid = str(uuid.uuid4())[:8]
-
+    uid    = str(uuid.uuid4())[:8]
     v1     = f"/tmp/v1_{uid}.mp4"
     v2     = f"/tmp/v2_{uid}.mp4"
     audio  = f"/tmp/audio_{uid}.mp3"
@@ -31,15 +30,27 @@ def merge():
     final  = str(OUTPUT_DIR / f"{uid}.mp4")
     list_f = f"/tmp/list_{uid}.txt"
 
-    # Завантаження
+    # Завантаження файлів
     for url, path in [(data['video1'], v1), (data['video2'], v2), (data['audio'], audio)]:
         with open(path, 'wb') as f:
             f.write(requests.get(url, timeout=120).content)
 
-    # Субтитри (4 слова, рівномірно за 20 сек)
-    words  = data['text'].split()
-    chunks = [words[i:i+6] for i in range(0, len(words), 6)]
-    dur    = 20.0 / len(chunks)
+    # Отримати реальну тривалість аудіо через ffprobe
+    probe = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+         "-of", "csv=p=0", audio],
+        capture_output=True, text=True
+    )
+    try:
+        audio_dur = float(probe.stdout.strip())
+    except:
+        audio_dur = 20.0  # fallback якщо щось пішло не так
+
+    # Субтитри: 3 слова, синхронізовані під реальну тривалість аудіо
+    words      = data['text'].split()
+    chunk_size = 3
+    chunks     = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
+    dur        = audio_dur / len(chunks)  # рівномірно під реальне аудіо
 
     def t(s):
         return f"{int(s//3600):02}:{int((s%3600)//60):02}:{int(s%60):02},{int((s%1)*1000):03}"
@@ -47,11 +58,15 @@ def merge():
     srt_txt = ""
     for i, chunk in enumerate(chunks):
         srt_txt += f"{i+1}\n{t(i*dur)} --> {t((i+1)*dur)}\n{' '.join(chunk).upper()}\n\n"
+
     open(srt, 'w').write(srt_txt)
 
-    # З'єднати відео
+    # З'єднати два відео
     open(list_f, 'w').write(f"file '{v1}'\nfile '{v2}'\n")
-    subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_f, "-c", "copy", merged], capture_output=True)
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_f, "-c", "copy", merged],
+        capture_output=True
+    )
 
     # Додати аудіо + субтитри
     subprocess.run([
@@ -61,8 +76,10 @@ def merge():
         "-c:v", "libx264", "-c:a", "aac", "-shortest", final
     ], capture_output=True)
 
+    # Очистити тимчасові файли
     for f in [v1, v2, audio, merged, srt, list_f]:
-        if os.path.exists(f): os.remove(f)
+        if os.path.exists(f):
+            os.remove(f)
 
     base = os.environ.get("BASE_URL", "https://web-production-97338.up.railway.app")
     return jsonify({"url": f"{base}/download/{uid}"})

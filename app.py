@@ -38,7 +38,7 @@ def merge():
 
     # Субтитри (4 слова, рівномірно за 20 сек)
     words  = data['text'].split()
-    chunks = [words[i:i+5] for i in range(0, len(words), 5)]
+    chunks = [words[i:i+6] for i in range(0, len(words), 6)]
     dur    = 20.0 / len(chunks)
 
     def t(s):

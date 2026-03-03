@@ -71,7 +71,7 @@ def merge():
     # Додати аудіо + субтитри
     subprocess.run([
         "ffmpeg", "-y", "-i", merged, "-i", audio,
-        "-vf", f"subtitles={srt}:force_style='FontSize=16,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Bold=1,Alignment=2,MarginV=100'",
+        "-vf", f"subtitles={srt}:force_style='FontSize=16,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Bold=1,Alignment=2,MarginV=50'",
         "-map", "0:v", "-map", "1:a",
         "-c:v", "libx264", "-c:a", "aac", "-shortest", final
     ], capture_output=True)
